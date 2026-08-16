@@ -1,0 +1,64 @@
+#!/bin/sh
+
+HELLO_DRIVER=hello
+FAULTY_DRIVER=faulty
+SCULL_DRIVER=scull
+MODE="644"
+
+case "$1" in
+    start)
+        # Load hello driver
+        echo "Loading the hello driver"
+        modprobe $HELLO_DRIVER || exit 1
+
+        # Load the fauly driver
+        echo "Loading the faulty driver"
+        modprobe $FAULTY_DRIVER || exit 1
+        
+        rm -f /dev/${FAULTY_DRIVER}
+        faulty_major=$(awk "\$2==\"${FAULTY_DRIVER}\" {print \$1}" /proc/devices)
+        if [ -n "$faulty_major" ]; then
+            mknod /dev/${FAULTY_DRIVER} c $faulty_major 0
+            chmod $MODE /dev/${FAULTY_DRIVER}
+        fi
+
+        # Load scull driver
+        echo "Loading the scull driver"
+        modprobe $SCULL_DRIVER || exit 1
+
+        rm -f /dev/${SCULL_DRIVER}[0-3]
+        scull_major=$(awk "\$2==\"${SCULL_DRIVER}\" {print \$1}" /proc/devices)
+        if [ -n "$scull_major" ]; then
+            mknod /dev/${SCULL_DRIVER}0 c $scull_major 0
+            mknod /dev/${SCULL_DRIVER}1 c $scull_major 1
+            mknod /dev/${SCULL_DRIVER}2 c $scull_major 2
+            mknod /dev/${SCULL_DRIVER}3 c $scull_major 3
+            chmod $MODE /dev/${SCULL_DRIVER}[0-3]
+        fi
+    ;;
+    
+    stop)
+        echo "Unloading the scull driver"
+        rmmod $SCULL_DRIVER
+        rm -f /dev/${SCULL_DRIVER}[0-3]
+
+        echo "Unloading the faulty driver"
+        rmmod $FAULTY_DRIVER
+        rm -f /dev/${FAULTY_DRIVER}
+
+        echo "Unloading the hello driver via rmmod"
+        rmmod $HELLO_DRIVER
+    ;;
+    
+    restart)
+        $0 stop
+        $0 start
+    ;;
+    
+    *)
+        echo "Usage: $0 {start|stop|restart}"
+        exit 1
+    ;;
+esac
+
+exit 0
